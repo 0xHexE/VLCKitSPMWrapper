@@ -81,31 +81,21 @@ jobs:
     - name: Create Release
       if: ${{ inputs.create_release }}
       id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ env.TAG_VERSION }}
-        release_name: Release ${{ env.TAG_VERSION }}
+        name: Release ${{ env.TAG_VERSION }}
         draft: false
         prerelease: false
-
-    - name: Upload Release Asset
-      if: ${{ inputs.create_release }}
-      uses: actions/upload-release-asset@v1
+        files: .tmp/VLCKit-all.xcframework.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: .tmp/VLCKit-all.xcframework.zip
-        asset_name: VLCKit-all.xcframework.zip
-        asset_content_type: application/zip
 
     - name: Update Package.swift
       run: |
         PACKAGE_HASH=$(shasum -a 256 ".tmp/VLCKit-all.xcframework.zip" | awk '{ print $1 }')
-        PACKAGE_STRING="Target.binaryTarget(name: \"VLCKit-all\", url: \"https:\/\/github.com\/${GITHUB_REPOSITORY}\/releases\/download\/${TAG_VERSION}\/VLCKit-all.xcframework.zip\", checksum: \"$PACKAGE_HASH\")"
-        sed -i '' -e "s/let vlcBinary.*/let vlcBinary = $PACKAGE_STRING/" Package.swift
+        ESCAPED_STRING="Target.binaryTarget(name: \\\"VLCKit-all\\\", url: \\\"https:\/\/github.com\/${GITHUB_REPOSITORY}\/releases\/download\/${TAG_VERSION}\/VLCKit-all.xcframework.zip\\\", checksum: \\\"$PACKAGE_HASH\\\")"
+        perl -i -pe "s/let vlcBinary.*$/let vlcBinary = $ESCAPED_STRING/" Package.swift
 
     - name: Copy License
       run: cp -f .tmp/MobileVLCKit-binary/COPYING.txt ./LICENSE
