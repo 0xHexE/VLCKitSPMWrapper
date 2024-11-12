@@ -1,0 +1,119 @@
+name: Package VLCKit Frameworks
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'VLCKit Version (e.g., 3.6.0-c73b779f-dd8bfdba)'
+        required: true
+        type: string
+      create_release:
+        description: 'Create a new release'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Variables and Version
+      run: |
+        # Extract base version (e.g., 3.6.0 from 3.6.0-c73b779f-dd8bfdba)
+        BASE_VERSION=$(echo "${{ inputs.version }}" | cut -d'-' -f1)
+        # Create tag version (e.g., v3.6.0)
+        TAG_VERSION="v${BASE_VERSION}"
+        
+        # Set environment variables
+        echo "BASE_VERSION=${BASE_VERSION}" >> $GITHUB_ENV
+        echo "TAG_VERSION=${TAG_VERSION}" >> $GITHUB_ENV
+        echo "FULL_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+        
+        # Set download URLs
+        echo "IOS_URL=https://download.videolan.org/pub/cocoapods/prod/MobileVLCKit-${{ inputs.version }}.tar.xz" >> $GITHUB_ENV
+        echo "MACOS_URL=https://download.videolan.org/pub/cocoapods/prod/VLCKit-${{ inputs.version }}.tar.xz" >> $GITHUB_ENV
+        echo "TVOS_URL=https://download.videolan.org/cocoapods/prod/TVVLCKit-${{ inputs.version }}.tar.xz" >> $GITHUB_ENV
+
+    - name: Create Temp Directory
+      run: mkdir -p .tmp/
+
+    - name: Download and Extract MobileVLCKit
+      run: |
+        wget -O .tmp/MobileVLCKit.tar.xz ${{ env.IOS_URL }}
+        tar -xf .tmp/MobileVLCKit.tar.xz -C .tmp/
+
+    - name: Download and Extract VLCKit
+      run: |
+        wget -O .tmp/VLCKit.tar.xz ${{ env.MACOS_URL }}
+        tar -xf .tmp/VLCKit.tar.xz -C .tmp/
+
+    - name: Download and Extract TVVLCKit
+      run: |
+        wget -O .tmp/TVVLCKit.tar.xz ${{ env.TVOS_URL }}
+        tar -xf .tmp/TVVLCKit.tar.xz -C .tmp/
+
+    - name: Create XCFramework
+      run: |
+        IOS_LOCATION=".tmp/MobileVLCKit-binary/MobileVLCKit.xcframework"
+        TVOS_LOCATION=".tmp/TVVLCKit-binary/TVVLCKit.xcframework"
+        MACOS_LOCATION=".tmp/VLCKit - binary package/VLCKit.xcframework"
+        
+        xcodebuild -create-xcframework \
+          -framework "$MACOS_LOCATION/macos-arm64_x86_64/VLCKit.framework" \
+          -debug-symbols "${PWD}/$MACOS_LOCATION/macos-arm64_x86_64/dSYMs/VLCKit.framework.dSYM" \
+          -framework "$TVOS_LOCATION/tvos-arm64_x86_64-simulator/TVVLCKit.framework" \
+          -debug-symbols "${PWD}/$TVOS_LOCATION/tvos-arm64_x86_64-simulator/dSYMs/TVVLCKit.framework.dSYM" \
+          -framework "$TVOS_LOCATION/tvos-arm64/TVVLCKit.framework"  \
+          -debug-symbols "${PWD}/$TVOS_LOCATION/tvos-arm64/dSYMs/TVVLCKit.framework.dSYM" \
+          -framework "$IOS_LOCATION/ios-arm64_i386_x86_64-simulator/MobileVLCKit.framework" \
+          -debug-symbols "${PWD}/$IOS_LOCATION/ios-arm64_i386_x86_64-simulator/dSYMs/MobileVLCKit.framework.dSYM" \
+          -framework "$IOS_LOCATION/ios-arm64_armv7_armv7s/MobileVLCKit.framework" \
+          -debug-symbols "${PWD}/$IOS_LOCATION/ios-arm64_armv7_armv7s/dSYMs/MobileVLCKit.framework.dSYM" \
+          -output .tmp/VLCKit-all.xcframework
+
+    - name: Create ZIP Archive
+      run: |
+        ditto -c -k --sequesterRsrc --keepParent ".tmp/VLCKit-all.xcframework" ".tmp/VLCKit-all.xcframework.zip"
+
+    - name: Create Release
+      if: ${{ inputs.create_release }}
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ env.TAG_VERSION }}
+        release_name: Release ${{ env.TAG_VERSION }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      if: ${{ inputs.create_release }}
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: .tmp/VLCKit-all.xcframework.zip
+        asset_name: VLCKit-all.xcframework.zip
+        asset_content_type: application/zip
+
+    - name: Update Package.swift
+      run: |
+        PACKAGE_HASH=$(shasum -a 256 ".tmp/VLCKit-all.xcframework.zip" | awk '{ print $1 }')
+        PACKAGE_STRING="Target.binaryTarget(name: \"VLCKit-all\", url: \"https:\/\/github.com\/${GITHUB_REPOSITORY}\/releases\/download\/${TAG_VERSION}\/VLCKit-all.xcframework.zip\", checksum: \"$PACKAGE_HASH\")"
+        sed -i '' -e "s/let vlcBinary.*/let vlcBinary = $PACKAGE_STRING/" Package.swift
+
+    - name: Copy License
+      run: cp -f .tmp/MobileVLCKit-binary/COPYING.txt ./LICENSE
+
+    - name: Commit and Push Changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add Package.swift LICENSE
+        git commit -m "Update package definition for version ${TAG_VERSION}"
+        git push
