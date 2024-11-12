@@ -101,7 +101,7 @@ jobs:
         import PackageDescription
         let vlcBinary = Target.binaryTarget(name: "VLCKit-all", url: "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_VERSION}/VLCKit-all.xcframework.zip", checksum: "${PACKAGE_HASH}")
         let package = Package(
-            name: "vlckit-spm",
+            name: "VLCKit",
             platforms: [.macOS(.v10_13), .iOS(.v11), .tvOS(.v11)],
             products: [
                 .library(
