@@ -1,7 +1,7 @@
 // swift-tools-version: 5.7
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 import PackageDescription
-let vlcBinary = Target.binaryTarget(name: "VLCKit-all", url: "https://github.com/0xHexE/VLCKit/releases/download/v3.6.0/VLCKit-all.xcframework.zip", checksum: "9ca697afbbeba7be889da6b0b378a255a5d7558bb9ebddb8c051617b0357d6c6")
+let vlcBinary = Target.binaryTarget(name: "VLCKit-all", url: "https://github.com/0xHexE/VLCKitSPMWrapper/releases/download/v3.6.0/VLCKit-all.xcframework.zip", checksum: "1a102128fff9333239c0d0cfbfc3e4bba099896a250d25b72d2b4ec0c259d905")
 let package = Package(
     name: "VLCKit",
     platforms: [.macOS(.v10_13), .iOS(.v11), .tvOS(.v11)],
